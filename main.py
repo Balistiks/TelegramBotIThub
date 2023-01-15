@@ -1,3 +1,6 @@
+import os
+import shutil
+
 import config
 import logging
 from aiogram.dispatcher import FSMContext
@@ -5,6 +8,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram import Bot, Dispatcher, types, executor
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import sqlite3
+from openpyxl import load_workbook
 
 logging.basicConfig(level=logging.INFO)
 db = sqlite3.connect('database/answersdb.db')
@@ -12,6 +16,8 @@ cur = db.cursor()
 
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
+
+ADMINS = [732710875]
 
 
 class User(StatesGroup):
@@ -28,20 +34,54 @@ class User(StatesGroup):
 
 @dp.message_handler(commands="start")
 async def cmd_test1(message: types.Message):
-    cur.execute("""
-    INSERT INTO Answers(UserId)
-    VALUES(?);""", (str(message.chat.id),))
-    db.commit()
+    if message.chat.id not in ADMINS:
+        cur.execute("""
+        INSERT INTO Answers(UserId)
+        VALUES(?);""", (str(message.chat.id),))
+        db.commit()
 
-    cur.execute("""
-    INSERT INTO DetailedAnswers(AnswersId, UserId)
-    VALUES((SELECT Id FROM Answers WHERE UserId = ?),?);
-    """, (str(message.chat.id), str(message.chat.id),))
-    db.commit()
+        cur.execute("""
+        INSERT INTO DetailedAnswers(AnswersId, UserId)
+        VALUES((SELECT Id FROM Answers WHERE UserId = ?),?);
+        """, (str(message.chat.id), str(message.chat.id),))
+        db.commit()
 
-    await message.answer("Бот для отзывов.")
-    await User.name.set()
-    await message.answer("Как вас зовут?")
+        await message.answer("Бот для отзывов.")
+        await User.name.set()
+        await message.answer("Как вас зовут?")
+    else:
+        await message.answer("Для того чтобы получить все отзывы напишите: /reviews")
+
+
+@dp.message_handler(commands='reviews')
+async def get_reviews(message: types.Message):
+    if message.chat.id not in ADMINS:
+        await message.answer("У вас нет доступа к этой команде")
+    else:
+        cur.execute("""
+        SELECT * FROM Answers
+        """)
+        reviews = cur.fetchall()
+        cur.execute("""
+        SELECT * FROM DetailedAnswers
+        """)
+        detailed_reviews = cur.fetchall()
+        if os.path.exists('reviews.xlsx'):
+            os.remove('reviews.xlsx')
+            shutil.copyfile('reviews_sample.xlsx', 'reviews.xlsx')
+        else:
+            shutil.copyfile('reviews_sample.xlsx', 'reviews.xlsx')
+
+        wb = load_workbook(filename='reviews.xlsx', data_only=True)
+
+        for row in reviews:
+            wb['Ответы'].append(row)
+        for row in detailed_reviews:
+            wb["Развернутые ответы"].append(row)
+        wb.save('reviews.xlsx')
+
+        await message.answer_document(open('reviews.xlsx', 'rb'))
+
 
 
 @dp.message_handler(state=User.name)
@@ -70,7 +110,7 @@ async def process_phone(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler()
 async def questionCallback(call: types.CallbackQuery, state: FSMContext):
-    keyboardAnswer = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+    keyboardAnswer = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
     buttonAnswer = types.KeyboardButton(text="Не хочу отвечать")
     keyboardAnswer.add(buttonAnswer)
     if call.data[0] == "1":
@@ -163,9 +203,11 @@ async def questionCallback(call: types.CallbackQuery, state: FSMContext):
         WHERE UserId = ?;
         """, (call.data[1::1], call.message.chat.id,))
         db.commit()
+
     await bot.edit_message_reply_markup(chat_id=call.message.chat.id,
                                         message_id=call.message.message_id,
                                         reply_markup=None)
+
     await call.answer()
 
 
