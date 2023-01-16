@@ -1,6 +1,5 @@
 import os
 import shutil
-
 import config
 import logging
 from aiogram.dispatcher import FSMContext
@@ -17,7 +16,7 @@ cur = db.cursor()
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 
-ADMINS = [732710875]
+ADMINS = [732710875, 723765512]
 
 
 class User(StatesGroup):
@@ -110,9 +109,6 @@ async def process_phone(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler()
 async def questionCallback(call: types.CallbackQuery, state: FSMContext):
-    keyboardAnswer = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-    buttonAnswer = types.KeyboardButton(text="Не хочу отвечать")
-    keyboardAnswer.add(buttonAnswer)
     if call.data[0] == "1":
         if call.data[1::1] == "Да":
             await question2(call.message.chat.id)
@@ -121,8 +117,7 @@ async def questionCallback(call: types.CallbackQuery, state: FSMContext):
             await bot.send_message(chat_id=call.message.chat.id,
                                    text="Ох, это обидно! Расскажите, что не удалось "
                                         "сделать и почему. "
-                                        "Напишите своими словами",
-                                   reply_markup=keyboardAnswer)
+                                        "Напишите своими словами")
         cur.execute("""
         UPDATE Answers
         SET Answer1 = ?
@@ -134,8 +129,7 @@ async def questionCallback(call: types.CallbackQuery, state: FSMContext):
             await question3(call.message.chat.id)
         else:
             await User.secondQuestion.set()
-            await bot.send_message(chat_id=call.message.chat.id, text="Ого! А почему так произошло?",
-                                   reply_markup=keyboardAnswer)
+            await bot.send_message(chat_id=call.message.chat.id, text="Ого! А почему так произошло?")
         cur.execute("""
         UPDATE Answers
         SET Answer2 = ?
@@ -149,8 +143,7 @@ async def questionCallback(call: types.CallbackQuery, state: FSMContext):
             await User.thirdQuestion.set()
             await bot.send_message(chat_id=call.message.chat.id,
                                    text="Это совсем неправильно. "
-                                        "Напишите, с кем вы общались и что случилось",
-                                   reply_markup=keyboardAnswer)
+                                        "Напишите, с кем вы общались и что случилось")
         cur.execute("""
         UPDATE Answers
         SET Answer3 = ?
@@ -163,8 +156,7 @@ async def questionCallback(call: types.CallbackQuery, state: FSMContext):
         else:
             await User.fourthQuestion.set()
             await bot.send_message(chat_id=call.message.chat.id,
-                                   text="Почему?",
-                                   reply_markup=keyboardAnswer)
+                                   text="Почему?")
         cur.execute("""
         UPDATE Answers
         SET Answer4 = ?
@@ -177,8 +169,7 @@ async def questionCallback(call: types.CallbackQuery, state: FSMContext):
         else:
             await User.fifthQuestion.set()
             await bot.send_message(chat_id=call.message.chat.id,
-                                   text="Так, непорядок! Расскажите подробнее, что было не так с выступлением",
-                                   reply_markup=keyboardAnswer)
+                                   text="Так, непорядок! Расскажите подробнее, что было не так с выступлением")
         cur.execute("""
         UPDATE Answers
         SET Answer5 = ?
@@ -190,13 +181,11 @@ async def questionCallback(call: types.CallbackQuery, state: FSMContext):
             await User.sixthQuestionGood.set()
             await bot.send_message(chat_id=call.message.chat.id,
                                    text="Спасибо! Напишите мне, что вам особенно понравилось - "
-                                        "передам команде",
-                                   reply_markup=keyboardAnswer)
+                                        "передам команде")
         else:
             await User.sixthQuestionBad.set()
             await bot.send_message(chat_id=call.message.chat.id,
-                                   text="Как жаль :( А вдруг мы поможем что-то сделать?",
-                                   reply_markup=keyboardAnswer)
+                                   text="Как жаль :( А вдруг мы поможем что-то сделать?")
         cur.execute("""
         UPDATE Answers
         SET Answer6 = ?
