@@ -20,7 +20,8 @@ directorate = [732710875]
 class AddEvent(StatesGroup):
     name = State()
     number = State()
-    questions = State()
+    addQuestionState = State()
+    addAnswersQuestionState = State()
 
 
 class StateUser(StatesGroup):
@@ -72,39 +73,56 @@ async def addEventName(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=AddEvent.number)
 async def addNumberQuestions(message: types.Message, state: FSMContext):
-    try:
-        numberQuestions = int(message.text)
-        await state.update_data(numberQuestions=numberQuestions)
-        data = await state.get_data()
-        cur.execute("INSERT INTO Events (EventTitle, NumberOfQuestions) VALUES (?, ?)", (data["nameEvent"], numberQuestions,))
-        db.commit()
+    numberQuestions = int(message.text)
+    await state.update_data(numberQuestions=numberQuestions)
+    data = await state.get_data()
+    cur.execute("INSERT INTO Events (EventTitle, NumberOfQuestions) VALUES (?, ?)", (data["nameEvent"],
+                                                                                     numberQuestions,))
+    db.commit()
+    await AddEvent.addQuestionState.set()
+    await message.answer("Напишите вопрос")
+
+
+@dp.message_handler(state=AddEvent.addQuestionState)
+async def addQuestion(message: types.Message, state: FSMContext):
+    await state.update_data(question=message.text)
+    await AddEvent.addAnswersQuestionState.set()
+    await message.answer("Напишите варианты ответа через запятую и пробел!\n"
+                         "Пример: да, нет, может быть")
+
+
+@dp.message_handler(state=AddEvent.addAnswersQuestionState)
+async def addAnswersQuestion(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    number_questions = data['numberQuestions'] - 1
+    await state.update_data(numberQuestions=number_questions)
+    event_title = data['nameEvent']
+    question = data['question']
+    if number_questions == 0:
         cur.execute("""
-        CREATE TABLE "?"
-        (
-            Id INTEGER PRIMARY KEY AUTOINCREMENT,
-            EventId INTEGER,
-            EventTitle TEXT,
-            FOREIGN KEY (EventId) REFERENCES EVENTS (Id)
-        )
-        """, (data["nameEvent"],))
-        cur.execute("""
-        INSERT INTO "?" (EventId, EventTitle)
+        INSERT INTO EventsQuestions (EventId, Question, Answers)
         VALUES
         (
-            (SELECT Id FROM Events WHERE EventTitle='?'),
-            "?"
+            (SELECT Id FROM Events WHERE EventTitle = ?),
+            ?,
+            ?
         )
-        """, (data["nameEvent"], data["nameEvent"], data["nameEvent"],))
-        await AddEvent.questions.set()
-    except:
-        await message.answer(text="Что-то не то написал, попробуй еще раз")
-        await message.answer(text="Сколько вопросов будет?")
-
-
-@dp.message_handler(state=AddEvent.questions)
-async def addQuestion(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    
-
+        """, (event_title, question, message.text))
+        db.commit()
+        await message.answer("Мероприятие добавлено")
+    else:
+        cur.execute("""
+                INSERT INTO EventsQuestions (EventId, Question, Answers)
+                VALUES
+                (
+                    (SELECT Id FROM Events WHERE EventTitle = ?),
+                    ?,
+                    ?
+                )
+                """, (event_title, question, message.text))
+        db.commit()
+        await message.answer("Вопрос добавлен")
+        await AddEvent.addQuestionState.set()
+        await message.answer("Напишите следующий вопрос")
 
 executor.start_polling(dp, skip_updates=True)
